@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "WhatsApp Web Login Manager",
+  "version": "1.0.0",
+  "description": "Manage WhatsApp Web login status, sign out users, and facilitate QR code authentication",
+  "permissions": [
+    "activeTab",
+    "cookies",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WhatsApp Web Manager"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["contentScript.js"],
+      "run_at": "document_idle"
+    }
+  ]
+  // "icons": {
+  //   "16": "icons/icon-16.png",
+  //   "48": "icons/icon-48.png",
+  //   "128": "icons/icon-128.png"
+  // }
+}

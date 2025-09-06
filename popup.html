@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Web Manager</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            width: 350px;
+            background: #f0f2f5;
+            color: #111b21;
+        }
+
+        .header {
+            background: #25d366;
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-icon {
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #25d366;
+            font-weight: bold;
+        }
+
+        .header-text {
+            flex: 1;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 2px;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .status-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #8696a0;
+        }
+
+        .status-dot.online {
+            background: #25d366;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: #f15c6d;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .status-text {
+            flex: 1;
+        }
+
+        .status-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .status-subtitle {
+            font-size: 12px;
+            color: #8696a0;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #e5e7eb;
+            border-top: 2px solid #25d366;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #25d366;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #20b358;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #667781;
+            border: 1px solid #e5e7eb;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #f8f9fa;
+        }
+
+        .btn-danger {
+            background: #f15c6d;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #d63447;
+        }
+
+        .qr-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .qr-container {
+            margin: 16px 0;
+        }
+
+        .qr-code {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .qr-placeholder {
+            width: 200px;
+            height: 200px;
+            background: #f0f2f5;
+            border: 2px dashed #8696a0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            color: #8696a0;
+            font-size: 14px;
+        }
+
+        .error-message {
+            background: #fff2f2;
+            color: #d63447;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-bottom: 16px;
+            border-left: 4px solid #f15c6d;
+        }
+
+        .success-message {
+            background: #f0fdf4;
+            color: #166534;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-bottom: 16px;
+            border-left: 4px solid #25d366;
+        }
+
+        .footer {
+            padding: 16px 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+        }
+
+        .footer-text {
+            font-size: 11px;
+            color: #8696a0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .refresh-icon {
+            width: 14px;
+            height: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-icon">W</div>
+        <div class="header-text">
+            <h1>WhatsApp Web Manager</h1>
+            <p>Manage your WhatsApp Web session</p>
+            <!-- Debug/Diagnostics Section -->
+        <div id="diagnosticsSection" class="qr-section hidden">
+            <h3 style="margin-bottom: 12px; font-size: 16px;">Diagnostics & Logs</h3>
+            
+            <div class="actions" style="margin-bottom: 16px;">
+                <button id="clearLogsBtn" class="btn btn-secondary">Clear Logs</button>
+                <button id="exportLogsBtn" class="btn btn-secondary">Export Logs</button>
+            </div>
+            
+            <div id="diagnosticsContent" style="background: #f8f9fa; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; max-height: 200px; overflow-y: auto; text-align: left;">
+                <div>Loading diagnostics...</div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <div class="content">
+        <!-- Loading State -->
+        <div id="loadingState" class="loading">
+            <div class="spinner"></div>
+            <span style="margin-left: 12px; font-size: 14px; color: #8696a0;">Checking status...</span>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="error-message hidden"></div>
+
+        <!-- Success Message -->
+        <div id="successMessage" class="success-message hidden"></div>
+
+        <!-- Status Section -->
+        <div id="statusSection" class="status-section hidden">
+            <div class="status-indicator">
+                <div id="statusDot" class="status-dot"></div>
+                <div class="status-text">
+                    <div id="statusTitle" class="status-title">Checking...</div>
+                    <div id="statusSubtitle" class="status-subtitle">Please wait</div>
+                </div>
+            </div>
+            
+            <div class="actions">
+                <button id="refreshBtn" class="btn btn-secondary">
+                    <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M22.99 14A9 9 0 0 1 8.36 18.36L23 14"></path>
+                    </svg>
+                    Refresh Status
+                </button>
+                
+                <button id="signOutBtn" class="btn btn-danger hidden">
+                    Sign Out
+                </button>
+                
+                <button id="openWhatsAppBtn" class="btn btn-primary hidden">
+                    Open WhatsApp Web
+                </button>
+            </div>
+        </div>
+
+        <!-- QR Code Section -->
+        <div id="qrSection" class="qr-section hidden">
+            <h3 style="margin-bottom: 12px; font-size: 16px;">Scan QR Code to Login</h3>
+            <p style="color: #8696a0; font-size: 12px; margin-bottom: 16px;">
+                Open WhatsApp on your phone and scan this code
+            </p>
+            
+            <div class="qr-container">
+                <img id="qrCodeImage" class="qr-code hidden" alt="WhatsApp QR Code" />
+                <div id="qrPlaceholder" class="qr-placeholder">
+                    QR Code will appear here
+                </div>
+            </div>
+            
+            <button id="refreshQRBtn" class="btn btn-secondary" style="margin-top: 16px;">
+                <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M22.99 14A9 9 0 0 1 8.36 18.36L23 14"></path>
+                </svg>
+                Refresh QR Code
+            </button>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p class="footer-text">WhatsApp Web Login Manager v1.0.0</p>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

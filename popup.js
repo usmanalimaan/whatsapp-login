@@ -1,0 +1,431 @@
+// WhatsApp Web Login Manager - Popup Script
+class PopupManager {
+  constructor() {
+    this.currentTab = null;
+    this.isWhatsAppTab = false;
+    this.init();
+  }
+
+  async init() {
+    console.log('WhatsApp Web Manager Popup: Initializing...');
+    
+    // Get current active tab
+    await this.getCurrentTab();
+    
+    // Setup event listeners
+    this.setupEventListeners();
+    
+    // Initial status check
+    await this.checkStatus();
+  }
+
+  async getCurrentTab() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      this.currentTab = tab;
+      this.isWhatsAppTab = tab?.url?.includes('web.whatsapp.com') || false;
+      console.log('Current tab:', this.isWhatsAppTab ? 'WhatsApp Web' : 'Other');
+    } catch (error) {
+      console.error('Failed to get current tab:', error);
+      this.showError('Failed to detect current tab');
+    }
+  }
+
+  setupEventListeners() {
+    // Refresh status button
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      this.checkStatus();
+    });
+
+    // Sign out button
+    document.getElementById('signOutBtn').addEventListener('click', () => {
+      this.performSignOut();
+    });
+
+    // Open WhatsApp Web button
+    document.getElementById('openWhatsAppBtn').addEventListener('click', () => {
+      this.openWhatsAppWeb();
+    });
+
+    // Refresh QR code button
+    document.getElementById('refreshQRBtn').addEventListener('click', () => {
+      this.refreshQRCode();
+    });
+  }
+
+  async checkStatus() {
+    this.showLoading(true);
+    this.hideMessages();
+
+    try {
+      if (!this.isWhatsAppTab) {
+        // Not on WhatsApp Web - check if there's a WhatsApp tab open
+        const whatsappTab = await this.findWhatsAppTab();
+        if (whatsappTab) {
+          this.currentTab = whatsappTab;
+          this.isWhatsAppTab = true;
+        } else {
+          this.showNotOnWhatsApp();
+          return;
+        }
+      }
+
+      // Check login status via content script
+      const response = await this.sendMessageToContentScript('checkLoginStatus');
+      
+      if (response.success) {
+        this.displayStatus(response.data);
+        
+        // If not logged in and no QR code, try to extract QR code
+        if (!response.data.isLoggedIn && !response.data.hasQRCode) {
+          setTimeout(() => this.extractQRCode(), 1000);
+        } else if (response.data.hasQRCode) {
+          this.extractQRCode();
+        }
+      } else {
+        throw new Error(response.message || 'Failed to check status');
+      }
+    } catch (error) {
+      console.error('Status check failed:', error);
+      this.showError('Failed to check WhatsApp status. Please refresh the page and try again.');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  async findWhatsAppTab() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'checkWhatsAppTab' });
+      return response.success ? response.data : null;
+    } catch (error) {
+      console.error('Failed to find WhatsApp tab:', error);
+      return null;
+    }
+  }
+
+  async sendMessageToContentScript(action, data = {}) {
+    if (!this.currentTab) {
+      throw new Error('No active tab found');
+    }
+
+    return new Promise((resolve) => {
+      chrome.tabs.sendMessage(
+        this.currentTab.id,
+        { action, ...data },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({ success: false, message: chrome.runtime.lastError.message });
+          } else {
+            resolve(response || { success: false, message: 'No response received' });
+          }
+        }
+      );
+    });
+  }
+
+  displayStatus(status) {
+    const statusSection = document.getElementById('statusSection');
+    const statusDot = document.getElementById('statusDot');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusSubtitle = document.getElementById('statusSubtitle');
+    const signOutBtn = document.getElementById('signOutBtn');
+    const qrSection = document.getElementById('qrSection');
+
+    statusSection.classList.remove('hidden');
+
+    if (status.isLoading) {
+      statusDot.className = 'status-dot';
+      statusTitle.textContent = 'Loading...';
+      statusSubtitle.textContent = 'WhatsApp Web is starting up';
+      signOutBtn.classList.add('hidden');
+      qrSection.classList.add('hidden');
+    } else if (status.isLoggedIn) {
+      statusDot.className = 'status-dot online';
+      statusTitle.textContent = 'Logged In';
+      statusSubtitle.textContent = status.username || 'WhatsApp Web is active';
+      signOutBtn.classList.remove('hidden');
+      qrSection.classList.add('hidden');
+    } else {
+      statusDot.className = 'status-dot offline';
+      statusTitle.textContent = 'Logged Out';
+      statusSubtitle.textContent = 'Please scan QR code to login';
+      signOutBtn.classList.add('hidden');
+      
+      if (status.hasQRCode) {
+        qrSection.classList.remove('hidden');
+      }
+    }
+  }
+
+  showNotOnWhatsApp() {
+    const statusSection = document.getElementById('statusSection');
+    const statusDot = document.getElementById('statusDot');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusSubtitle = document.getElementById('statusSubtitle');
+    const signOutBtn = document.getElementById('signOutBtn');
+    const openWhatsAppBtn = document.getElementById('openWhatsAppBtn');
+    const qrSection = document.getElementById('qrSection');
+
+    statusSection.classList.remove('hidden');
+    statusDot.className = 'status-dot';
+    statusTitle.textContent = 'WhatsApp Web Not Open';
+    statusSubtitle.textContent = 'Open WhatsApp Web to manage your session';
+    signOutBtn.classList.add('hidden');
+    openWhatsAppBtn.classList.remove('hidden');
+    qrSection.classList.add('hidden');
+  }
+
+  async performSignOut() {
+    const signOutBtn = document.getElementById('signOutBtn');
+    const originalText = signOutBtn.textContent;
+    
+    try {
+      signOutBtn.disabled = true;
+      signOutBtn.textContent = 'Signing out...';
+      
+      const response = await this.sendMessageToContentScript('performSignOut');
+      
+      if (response.success) {
+        this.showSuccess('Successfully signed out of WhatsApp Web');
+        // Refresh status after a delay
+        setTimeout(() => this.checkStatus(), 2000);
+      } else {
+        throw new Error(response.message || 'Sign out failed');
+      }
+    } catch (error) {
+      console.error('Sign out failed:', error);
+      this.showError('Failed to sign out. Please try again or manually log out from WhatsApp Web.');
+    } finally {
+      signOutBtn.disabled = false;
+      signOutBtn.textContent = originalText;
+    }
+  }
+
+  async openWhatsAppWeb() {
+    try {
+      await chrome.runtime.sendMessage({ action: 'openWhatsAppWeb' });
+      // Close the popup after opening WhatsApp Web
+      window.close();
+    } catch (error) {
+      console.error('Failed to open WhatsApp Web:', error);
+      this.showError('Failed to open WhatsApp Web');
+    }
+  }
+
+  async extractQRCode() {
+    try {
+      const response = await this.sendMessageToContentScript('extractQRCode');
+      
+      if (response.success && response.data) {
+        this.displayQRCode(response.data);
+      } else {
+        this.showQRPlaceholder();
+      }
+    } catch (error) {
+      console.error('Failed to extract QR code:', error);
+      this.showQRPlaceholder();
+    }
+  }
+
+  displayQRCode(dataURL) {
+    const qrSection = document.getElementById('qrSection');
+    const qrCodeImage = document.getElementById('qrCodeImage');
+    const qrPlaceholder = document.getElementById('qrPlaceholder');
+
+    qrSection.classList.remove('hidden');
+    qrCodeImage.src = dataURL;
+    qrCodeImage.classList.remove('hidden');
+    qrPlaceholder.classList.add('hidden');
+  }
+
+  showQRPlaceholder() {
+    const qrSection = document.getElementById('qrSection');
+    const qrCodeImage = document.getElementById('qrCodeImage');
+    const qrPlaceholder = document.getElementById('qrPlaceholder');
+
+    qrSection.classList.remove('hidden');
+    qrCodeImage.classList.add('hidden');
+    qrPlaceholder.classList.remove('hidden');
+    qrPlaceholder.textContent = 'QR Code not available';
+  }
+
+  async refreshQRCode() {
+    const refreshQRBtn = document.getElementById('refreshQRBtn');
+    const originalText = refreshQRBtn.textContent;
+    
+    try {
+      refreshQRBtn.disabled = true;
+      refreshQRBtn.textContent = 'Refreshing...';
+      
+      // Wait a moment then extract QR code again
+      setTimeout(() => this.extractQRCode(), 500);
+      
+    } catch (error) {
+      console.error('Failed to refresh QR code:', error);
+      this.showError('Failed to refresh QR code');
+    } finally {
+      setTimeout(() => {
+        refreshQRBtn.disabled = false;
+        refreshQRBtn.textContent = originalText;
+      }, 1000);
+    }
+  }
+
+  showLoading(show) {
+    const loadingState = document.getElementById('loadingState');
+    const statusSection = document.getElementById('statusSection');
+    const qrSection = document.getElementById('qrSection');
+
+    if (show) {
+      loadingState.classList.remove('hidden');
+      statusSection.classList.add('hidden');
+      qrSection.classList.add('hidden');
+    } else {
+      loadingState.classList.add('hidden');
+    }
+  }
+
+  showError(message) {
+    const errorMessage = document.getElementById('errorMessage');
+    errorMessage.textContent = message;
+    errorMessage.classList.remove('hidden');
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      errorMessage.classList.add('hidden');
+    }, 5000);
+  }
+
+  showSuccess(message) {
+    const successMessage = document.getElementById('successMessage');
+    successMessage.textContent = message;
+    successMessage.classList.remove('hidden');
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      successMessage.classList.add('hidden');
+    }, 3000);
+  }
+
+  hideMessages() {
+    document.getElementById('errorMessage').classList.add('hidden');
+    document.getElementById('successMessage').classList.add('hidden');
+  }
+
+  async toggleDiagnostics() {
+    const diagnosticsSection = document.getElementById('diagnosticsSection');
+    const diagnosticsBtn = document.getElementById('diagnosticsBtn');
+    
+    if (diagnosticsSection.classList.contains('hidden')) {
+      diagnosticsSection.classList.remove('hidden');
+      diagnosticsBtn.textContent = 'Hide Diagnostics';
+      await this.loadDiagnostics();
+    } else {
+      diagnosticsSection.classList.add('hidden');
+      diagnosticsBtn.textContent = 'View Diagnostics';
+    }
+  }
+
+  async loadDiagnostics() {
+    const diagnosticsContent = document.getElementById('diagnosticsContent');
+    
+    try {
+      // Get logs from content script
+      const logsResponse = await this.sendMessageToContentScript('getLogs');
+      
+      // Get general diagnostics if available
+      let diagnostics = {};
+      try {
+        const diagResponse = await this.sendMessageToContentScript('getDiagnosticInfo');
+        if (diagResponse.success) {
+          diagnostics = diagResponse.data;
+        }
+      } catch (e) {
+        // Diagnostics may not be available
+      }
+
+      const logs = logsResponse.success ? logsResponse.data : [];
+      
+      let content = `<strong>Extension Status:</strong><br>`;
+      content += `Tab: ${this.isWhatsAppTab ? 'WhatsApp Web' : 'Other'}<br>`;
+      content += `Timestamp: ${new Date().toISOString()}<br><br>`;
+      
+      if (Object.keys(diagnostics).length > 0) {
+        content += `<strong>Detection Methods:</strong><br>`;
+        content += `${JSON.stringify(diagnostics.detectionMethods || [], null, 2)}<br><br>`;
+      }
+      
+      content += `<strong>Recent Logs (${logs.length}):</strong><br>`;
+      
+      if (logs.length === 0) {
+        content += `<em>No logs available</em><br>`;
+      } else {
+        logs.slice(-10).forEach(log => {
+          const time = new Date(log.timestamp).toLocaleTimeString();
+          content += `[${time}] ${log.level}: ${log.message}<br>`;
+          if (log.data && typeof log.data === 'object') {
+            content += `  Data: ${JSON.stringify(log.data).substring(0, 100)}...<br>`;
+          }
+        });
+      }
+      
+      diagnosticsContent.innerHTML = content;
+    } catch (error) {
+      diagnosticsContent.innerHTML = `<strong>Error loading diagnostics:</strong><br>${error.message}`;
+    }
+  }
+
+  async clearLogs() {
+    try {
+      const response = await this.sendMessageToContentScript('clearLogs');
+      if (response.success) {
+        this.showSuccess('Logs cleared successfully');
+        await this.loadDiagnostics();
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (error) {
+      this.showError('Failed to clear logs: ' + error.message);
+    }
+  }
+
+  async exportLogs() {
+    try {
+      const response = await this.sendMessageToContentScript('getLogs');
+      if (response.success) {
+        const logs = response.data;
+        const exportData = {
+          timestamp: new Date().toISOString(),
+          extension: 'WhatsApp Web Login Manager',
+          version: '1.0.0',
+          tab: this.currentTab?.url || 'unknown',
+          logs: logs
+        };
+        
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        // Create temporary download link
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `whatsapp-manager-logs-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        this.showSuccess('Logs exported successfully');
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (error) {
+      this.showError('Failed to export logs: ' + error.message);
+    }
+  }
+}
+
+// Initialize popup when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  new PopupManager();
+});
