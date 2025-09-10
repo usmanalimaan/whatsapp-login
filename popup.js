@@ -255,19 +255,182 @@ class PopupManager {
     
     try {
       refreshQRBtn.disabled = true;
-      refreshQRBtn.textContent = 'Refreshing...';
+      refreshQRBtn.textContent = 'Opening new tab...';
       
-      // Wait a moment then extract QR code again
-      setTimeout(() => this.extractQRCode(), 500);
+      // Open new WhatsApp Web tab specifically for QR refresh
+      const response = await chrome.runtime.sendMessage({ 
+        action: 'openNewWhatsAppTab',
+        purpose: 'qr_refresh'
+      });
+      
+      if (response.success) {
+        const newTab = response.data;
+        
+        this.showSuccess(`New tab opened for QR refresh (Tab ID: ${newTab.id})`);
+        
+        // Update button to show tab management options
+        refreshQRBtn.textContent = 'New tab opened';
+        
+        // Add tab management buttons
+        this.addTabManagementUI(newTab);
+        
+        // Monitor the new tab for QR code
+        setTimeout(() => this.monitorNewTab(newTab), 3000);
+        
+      } else {
+        throw new Error(response.message || 'Failed to open new tab');
+      }
       
     } catch (error) {
       console.error('Failed to refresh QR code:', error);
-      this.showError('Failed to refresh QR code');
+      this.showError('Failed to open new tab for QR refresh');
     } finally {
       setTimeout(() => {
         refreshQRBtn.disabled = false;
         refreshQRBtn.textContent = originalText;
-      }, 1000);
+      }, 2000);
+    }
+  }
+
+  addTabManagementUI(newTab) {
+    const qrSection = document.getElementById('qrSection');
+    
+    // Remove existing tab management if present
+    const existingMgmt = qrSection.querySelector('.tab-management');
+    if (existingMgmt) existingMgmt.remove();
+    
+    // Create tab management section
+    const tabMgmt = document.createElement('div');
+    tabMgmt.className = 'tab-management';
+    tabMgmt.style.cssText = `
+      margin-top: 16px;
+      padding: 12px;
+      background: #f0f2f5;
+      border-radius: 8px;
+      border-left: 4px solid #25d366;
+    `;
+    
+    tabMgmt.innerHTML = `
+      <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px;">
+        Managed Tab: ${newTab.uniqueId}
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button id="focusNewTab" class="btn btn-secondary" style="font-size: 11px; padding: 6px 10px;">
+          Focus Tab
+        </button>
+        <button id="extractFromNewTab" class="btn btn-secondary" style="font-size: 11px; padding: 6px 10px;">
+          Extract QR
+        </button>
+        <button id="closeNewTab" class="btn btn-secondary" style="font-size: 11px; padding: 6px 10px;">
+          Close Tab
+        </button>
+      </div>
+      <div id="tabStatus" style="font-size: 11px; color: #8696a0; margin-top: 8px;">
+        Status: Initializing...
+      </div>
+    `;
+    
+    qrSection.appendChild(tabMgmt);
+    
+    // Add event listeners for tab management
+    document.getElementById('focusNewTab').addEventListener('click', () => {
+      this.focusTab(newTab.id);
+    });
+    
+    document.getElementById('extractFromNewTab').addEventListener('click', () => {
+      this.extractQRFromTab(newTab.id);
+    });
+    
+    document.getElementById('closeNewTab').addEventListener('click', () => {
+      this.closeTab(newTab.id);
+    });
+    
+    // Store tab info for later use
+    this.managedTab = newTab;
+  }
+
+  async focusTab(tabId) {
+    try {
+      await chrome.runtime.sendMessage({ 
+        action: 'focusTab',
+        tabId: tabId
+      });
+      this.showSuccess('Tab focused');
+    } catch (error) {
+      this.showError('Failed to focus tab');
+    }
+  }
+
+  async extractQRFromTab(tabId) {
+    try {
+      const extractBtn = document.getElementById('extractFromNewTab');
+      const originalText = extractBtn.textContent;
+      extractBtn.disabled = true;
+      extractBtn.textContent = 'Extracting...';
+      
+      // Send message to specific tab to extract QR code
+      const response = await chrome.tabs.sendMessage(tabId, { action: 'extractQRCode' });
+      
+      if (response && response.success && response.data) {
+        this.displayQRCode(response.data);
+        this.showSuccess('QR code extracted from new tab');
+        document.getElementById('tabStatus').textContent = 'Status: QR code extracted';
+      } else {
+        this.showError('No QR code found in the new tab');
+        document.getElementById('tabStatus').textContent = 'Status: No QR code found';
+      }
+      
+      extractBtn.disabled = false;
+      extractBtn.textContent = originalText;
+      
+    } catch (error) {
+      console.error('Failed to extract QR from tab:', error);
+      this.showError('Failed to extract QR code from tab');
+      document.getElementById('tabStatus').textContent = 'Status: Extraction failed';
+    }
+  }
+
+  async closeTab(tabId) {
+    try {
+      await chrome.runtime.sendMessage({ 
+        action: 'closeTab',
+        tabId: tabId
+      });
+      
+      // Remove tab management UI
+      const tabMgmt = document.querySelector('.tab-management');
+      if (tabMgmt) tabMgmt.remove();
+      
+      this.showSuccess('Managed tab closed');
+      this.managedTab = null;
+      
+    } catch (error) {
+      this.showError('Failed to close tab');
+    }
+  }
+
+  async monitorNewTab(newTab) {
+    try {
+      // Check tab status
+      const tabInfo = await chrome.runtime.sendMessage({
+        action: 'getTabInfo',
+        tabId: newTab.id
+      });
+      
+      if (tabInfo && tabInfo.success) {
+        const statusElement = document.getElementById('tabStatus');
+        if (statusElement) {
+          statusElement.textContent = `Status: ${tabInfo.data.status} - ${tabInfo.data.title}`;
+        }
+        
+        // Try to extract QR code automatically after a delay
+        setTimeout(() => {
+          this.extractQRFromTab(newTab.id);
+        }, 5000);
+      }
+      
+    } catch (error) {
+      console.error('Failed to monitor new tab:', error);
     }
   }
 

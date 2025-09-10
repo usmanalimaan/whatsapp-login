@@ -566,7 +566,11 @@ class WhatsAppWebManager {
     Logger.log('INFO', 'Starting QR code extraction');
     
     return new Promise((resolve) => {
+      let hasResolved = false; // Prevent multiple resolutions
+      
       const findAndExtractQR = () => {
+        if (hasResolved) return; // Exit if already resolved
+        
         try {
           // Enhanced QR code selectors
           const qrSelectors = [
@@ -605,6 +609,7 @@ class WhatsAppWebManager {
                   dataLength: dataURL.length,
                   type: 'canvas'
                 });
+                hasResolved = true;
                 resolve(dataURL);
                 return;
               }
@@ -626,35 +631,47 @@ class WhatsAppWebManager {
             const qrImg = document.querySelector(selector);
             if (qrImg && this.isElementVisible(qrImg) && qrImg.src) {
               Logger.log('INFO', `Found QR image with selector: ${selector}`);
+              hasResolved = true;
               resolve(qrImg.src);
               return;
             }
           }
           
           Logger.log('WARN', 'No QR code found in current attempt');
-          resolve(null);
           
         } catch (error) {
           Logger.log('ERROR', 'QR code extraction failed', error);
-          resolve(null);
         }
       };
 
-      // Try multiple times as QR code might not be immediately available
-      let attempts = 0;
-      const maxAttempts = 5;
+      // Try immediately first
+      findAndExtractQR();
       
-      const tryExtract = () => {
-        Logger.log('INFO', `QR extraction attempt ${attempts + 1}/${maxAttempts}`);
-        findAndExtractQR();
-        attempts++;
+      // If not resolved immediately, try a few more times
+      if (!hasResolved) {
+        let attempts = 0;
+        const maxAttempts = 3; // Reduced from 5
         
-        if (attempts < maxAttempts) {
-          setTimeout(tryExtract, 1000);
-        }
-      };
-
-      tryExtract();
+        const retryInterval = setInterval(() => {
+          if (hasResolved) {
+            clearInterval(retryInterval);
+            return;
+          }
+          
+          attempts++;
+          Logger.log('INFO', `QR extraction retry ${attempts}/${maxAttempts}`);
+          findAndExtractQR();
+          
+          if (attempts >= maxAttempts) {
+            clearInterval(retryInterval);
+            if (!hasResolved) {
+              Logger.log('WARN', 'QR code extraction failed after all attempts');
+              hasResolved = true;
+              resolve(null);
+            }
+          }
+        }, 1000);
+      }
     });
   }
 

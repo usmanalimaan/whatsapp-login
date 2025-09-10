@@ -7,10 +7,13 @@
     "activeTab",
     "cookies",
     "storage",
-    "scripting"
+    "scripting",
+    "management"
   ],
   "host_permissions": [
-    "https://web.whatsapp.com/*"
+    "https://web.whatsapp.com/*",
+    "http://localhost:8000/*",
+    "https://api.ipify.org/*"
   ],
   "action": {
     "default_popup": "popup.html",
